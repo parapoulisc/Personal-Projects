@@ -344,4 +344,161 @@ def gbmP4(mu, sigma, S0, T, deltaT, N):
     # Concatenate all chunks
     return np.hstack(results)
 
+# --------------------------- 9. MJD Diffusion Sims ----------------------------
+def JumpTime(N, lambda0):
+    """
+    Generate N jump times in the interval [0,1] for a Poisson process with intensity lambda0.
+
+    Parameters
+    ----------
+    N : int
+        Number of jumps to simulate.
+    lambda0 : float
+        Poisson process rate parameter (mean inter-arrival time).
+
+    Returns
+    -------
+    np.ndarray
+        Array of N normalized jump times in [0, 1).
+    """
+    if N == 0:
+        return np.array([])
+    inter_arrivals = np.random.default_rng().exponential(lambda0, size = N + 1)
+    jump_times = np.cumsum(inter_arrivals)
+    jump_times = jump_times / jump_times[N]
+    jump_times = np.delete(jump_times, N)
+    return jump_times
+
+def countProc(N, lambda0, deltaT):
+    """
+    Simulate a Poisson counting process over [0,1] with given jump times.
+
+    Parameters
+    ----------
+    N : int
+        Number of jumps to simulate.
+    lambda0 : float
+        Poisson process rate parameter (mean inter-arrival time).
+    deltaT : float
+        Time step size (fraction of year).
+
+    Returns
+    -------
+    np.ndarray
+        Array of counts at each time step, representing the cumulative number of jumps up to each time.
+    """
+    steps = int(1 / deltaT) + 1
+    jt = JumpTime(N, lambda0)
+    t_grid = np.linspace(0, 1, steps)
+    if N == 0 or jt.size == 0:
+        return np.zeros(steps, dtype=int)
+    counts = np.searchsorted(jt, t_grid, side='right')
+    return counts
+
+def JumpAmp(N, lambda0, alpha, delta):
+    """
+    Generate amplitudes for N jumps using a lognormal distribution.
+
+    Parameters
+    ----------
+    N : int
+        Number of jumps.
+    lambda0 : float
+        Poisson process rate parameter (unused in this function, included for interface compatibility).
+    alpha : float
+        Mean of the logarithm of jump size.
+    delta : float
+        Standard deviation of the logarithm of jump size.
+
+    Returns
+    -------
+    np.ndarray
+        Array of N jump amplitudes (lognormal random variables minus 1).
+    """
+    if N == 0:
+        return np.zeros(0)
+    return np.random.default_rng().lognormal(alpha, delta, size=N) - 1
+
+def PoisProc(lambda0, alpha, delta, deltaT):
+    """
+    Simulate a compound Poisson process over [0,1] with lognormal jump amplitudes.
+
+    Parameters
+    ----------
+    lambda0 : float
+        Poisson process rate parameter (expected number of jumps).
+    alpha : float
+        Mean of the logarithm of jump size.
+    delta : float
+        Standard deviation of the logarithm of jump size.
+    deltaT : float
+        Time step size (fraction of year).
+
+    Returns
+    -------
+    np.ndarray
+        Array of process values at each time step (cumulative sum of jump amplitudes).
+        Length is N+1, where N = int(1/deltaT): first element is 0, others are cumulative jump sums.
+    """
+    Nsteps = int(1 / deltaT) + 1
+    N_jumps = np.random.default_rng().poisson(lambda0)
+    if N_jumps == 0:
+        return np.zeros(Nsteps)
+    jump_times = JumpTime(N_jumps, lambda0)
+    jump_amps = JumpAmp(N_jumps, lambda0, alpha, delta)
+    t_grid = np.linspace(0, 1, Nsteps)
+    # For each time, sum all jump amplitudes whose jump time <= t
+    # Use searchsorted for vectorized cumulative sum
+    # Get indices of rightmost jump included at each time
+    jump_idx = np.searchsorted(jump_times, t_grid, side='right')
+    # Cumulative sum of jump amplitudes for all jumps
+    cumsum_amps = np.concatenate([[0], np.cumsum(jump_amps)])
+    # For each time, process value is cumsum_amps[jump_idx[t]]
+    J = cumsum_amps[jump_idx]
+    return J
+
+def MJD(mu, sigma, S0, lambda0, alpha, delta, deltaT):
+    """
+    Simulate a Merton Jump Diffusion (MJD) process by combining a geometric Brownian motion (GBM)
+    with a compound Poisson jump process.
+
+    Parameters
+    ----------
+    mu : float
+        Drift of the GBM component.
+    sigma : float
+        Volatility of the GBM component.
+    S0 : float
+        Initial asset price.
+    lambda0 : float
+        Poisson process rate parameter (expected number of jumps).
+    alpha : float
+        Mean of the logarithm of jump size.
+    delta : float
+        Standard deviation of the logarithm of jump size.
+    deltaT : float
+        Time step size (fraction of year).
+
+    Returns
+    -------
+    np.ndarray
+        Simulated asset price path under Merton Jump Diffusion model.
+        Length is N+1, with S1[0] = S0 and S1[1:] subsequent prices.
+    """
+    Nsteps = int(1 / deltaT) + 1
+    path_gbm = gbmP0(mu, sigma, S0, 1, deltaT)  # length Nsteps
+    logS = np.log(path_gbm)
+    J1 = PoisProc(lambda0, alpha, delta, deltaT)
+    logS1 = logS + J1
+    S1 = np.exp(logS1)
+    return S1
+
+def LevyPlot(mu, sigma, S0, lambda0, alpha, delta, deltaT):
+    '''
+    Plot Levy Process
+    '''
+    S1 = MJD(mu, sigma, S0, lambda0, alpha, delta, deltaT)
+    fig, ax = plt.subplots(figsize=[11, 5])
+    ax.plot(np.arange(int(1 / deltaT) + 1), S1, '-o', label='$S_t$', ms=1, alpha=0.6)
+    plt.show()
 # ------------------------------ END ------------------------------

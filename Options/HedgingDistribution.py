@@ -57,9 +57,9 @@ def BSsim(r, mu, sigma, S0, K, type, deltaT):
     t = [j / N for j in range(N + 1)]
     spot = mc.gbmP0(mu, sigma, S0, 1, deltaT)
     underlying = op.Spot(spot,r, t, 1, deltaT)
-    option = op.Option(spot, K, r, 1, t, sigma, 'European', type, deltaT)
+    option = op.OptionEng(spot, K, r, 1, t, sigma, 'European', type, op.BlackScholesEngine(), deltaT)
     scal_vol = underlying.VarReal()
-    return t, spot, option.price(), option.delta(), option.gamma(), option.dollar_gamma(), scal_vol, option.theta()
+    return t, spot, option.price(), option.delta(), option.gamma(), option.dollarGamma(), scal_vol, option.theta()
 
 def BSplot(r, mu, sigma, S0, K, type, deltaT):
     """
@@ -495,7 +495,7 @@ def BSsimF0(r, mu, sigma, S0, K, type, deltaT):
     N = int(1 / deltaT)
     t = [j / N for j in range(N + 1)]
     spot = mc.gbmP0(mu, sigma, S0, 1, deltaT)
-    option = op.Option(spot.T, K, r, 1, t, sigma, 'European', type, deltaT)
+    option = op.OptionEng(spot.T, K, r, 1, t, sigma, 'European', type, op.BlackScholesEngine(), deltaT)
     return t, spot.T, option.price(), option.delta()
 
 def dhedgeVF(r, mu, sigma, S0, K, type, deltaT, R):
@@ -533,7 +533,7 @@ def dhedgeVF(r, mu, sigma, S0, K, type, deltaT, R):
 
     return prof, prof_adj, vS, vB, qS, qB, B, S, V, delta, time
 
-#---------------- 3.1 Opt Delta Hedging Functions (path genN) ------------------
+#---------------- 4. Opt Delta Hedging Functions (path genN) ------------------
 def BSsimF1(r, mu, sigma, S0, K, type, deltaT, paths):
     """
     Simulates a geometric Brownian motion stock price path and computes
@@ -628,163 +628,51 @@ def dhedgeVF1(r, mu, sigma, S0, K, type, deltaT, R, paths):
 
     return prof, prof_adj, vS, vB, qS, qB, B, S, V, delta, time
 
-# ------------------------------ NOT CLEANED WIP -------------------------------
-# ------------------------------ 4. BS Utilities -------------------------------
-def D1(S, K, r, T, t, sigma):
-    return (np.log(S/K) + (r + (sigma**2)/2)*(T-t))/(sigma*(T-t)**0.5)
-
-def D2(d1, sigma, T, t):
-    return d1 - sigma*(T - t) ** 0.5
-
-def Call_BS(S, K, r, T, t, sigma):
-    d1 = D1(S, K, r, T, t, sigma)
-    d2 = D2(d1, sigma, T, t)
-    return S * st.norm.cdf(d1) - K * np.exp(-r*(T-t)) * st.norm.cdf(d2)
-       
-# ------------------------- 5. Levy Process Simulation -------------------------
-def JumpTime(N, lambda0):
-    '''
-    Jump Times - generates N jump times in [0,1] with lambda0 param
-    '''
-    JT0 = np.zeros(N+1)
-    for j in range(0,N+1):
-        JT0[j] = np.random.default_rng().exponential(lambda0)
-    s0 = np.cumsum(JT0)
-    s1 = s0/s0[N]
-    s2 = np.delete(s1,N)
-    return s2
-
-def countProc(N, lambda0, deltaT):
-    '''
-    Poisson Counting Process
-    '''
-    jt = JumpTime(N, lambda0)
-    count = np.zeros(int(1 / deltaT))
-    for t in range(1, int(1 / deltaT)):
-        a = np.where(jt > (t * deltaT), 0, jt)
-        b = np.max(a)
-        if b == 0:
-            count[t] = 0
-        else:
-            count[t] = list(jt).index(b) + 1
-    return count
-    
-def JumpAmp(N, lambda0, alpha, delta):
-    '''
-    Jump Amplitude
-    '''
-    JA = np.zeros(N)
-    for j in range(N):
-        JA[j] = np.random.default_rng().lognormal(alpha, delta) - 1
-    return JA
-
-def PoisProc(lambda0, alpha, delta, deltaT):
-    '''
-    Poisson Process simulation.
-    '''
-    J = np.zeros(int(1 / deltaT))
-    N = np.random.default_rng().poisson(lambda0)
-    if N == 0:
-        return J
-    else:
-        count_t = countProc(N, lambda0, deltaT)
-        y_j = JumpAmp(N, lambda0, alpha, delta)
-        for t in range(int(1 / deltaT)):
-            if count_t[t] == 0:
-                J[t] = 0
-            else:
-                J[t] = np.sum(y_j[0:(int(count_t[t] - 1))])
-        return J
-
-def MJD(mu, sigma, S0, lambda0, alpha, delta, deltaT):
-    '''
-    Merton Jump Diffusion; Levy Process; sums GBM and Poisson Point Process.
-    '''
-    path1 = mc.gbmP0(mu, sigma, S0, 1, deltaT)
-    logS = np.log(path1)
-    J1 = PoisProc(lambda0, alpha, delta, deltaT)
-    logS1 = np.add(logS,J1)
-    S1 = np.exp(logS1)
-    return S1
-
-def LevyPlot(mu, sigma, S0, lambda0, alpha, delta, deltaT):
-    '''
-    Plot Levy Process
-    '''
-    S1 = MJD(mu, sigma, S0, lambda0, alpha, delta, deltaT)
-    fig, ax = plt.subplots(figsize=[11, 5])
-    ax.plot(np.arange(int(1 / deltaT)), S1, '-o', label='$S_t$', ms=1, alpha=0.6)
-    plt.show()
-
-# --------------------------- 6. MJD Option Pricing ----------------------------
-def sigma_MJD(j, sigma, delta, T, t):
-    return np.sqrt((sigma ** 2 )+ j * (delta ** 2) / (T - t)) 
-
-def r_MJD(j, r, lambda0, alpha, delta, T, t):
-    return r - lambda0 * (np.exp(alpha + (delta ** 2) / 2) - 1) + (j * alpha + (j * delta ** 2) / 2) / (T - t)
-
-def S_MJD(j, S, T, t, lambda0, alpha, delta):
-    return S * np.exp((j * alpha) + (j * delta ** 2) / 2 - lambda0 * (T - t) * np.exp(alpha + (delta ** 2) / 2) + lambda0 * (T - t))
-
-def Call_Jump(sigma, S, T, t, K, r, lambda0, alpha, delta, n):
-    '''
-    Call Price Evaluated at MJD Params
-    '''
-    call_BS = np.zeros(n)
-    lambdabar = lambda0 * np.exp(alpha + (delta ** 2) / 2)
-    if t < T:
-        for j in range(n):
-            sigma1 = sigma_MJD(j, sigma, delta, T, t)
-            r1 = r_MJD(j, r, lambda0, alpha, delta, T, t)
-            call_BS[j] = ((np.exp(-lambdabar * r) * (lambdabar * (T - t)) ** j) / (m.factorial(j))) * Call_BS(S, K, r1, T, t, sigma1)
-        return np.sum(call_BS)
-    else:
-        return np.max([S-K,0])
-
-def Delta_MJD(S, K, r, T, t, sigma, lambda0, alpha, delta, n):
-    '''
-    Delta in MJD
-    '''
-    if t == T and S > K:
-        return 1
-    elif t == T and S < K:
-        return 0
-    else:
-        delta_BS = np.zeros(n)
-        lambdabar = lambda0 * np.exp(alpha + (delta ** 2) / 2)
-        for j in range(n):
-            sigma1 = sigma_MJD(j, sigma, delta, T, t)
-            r1 = r_MJD(j, r, lambda0, alpha, delta, T, t)
-            # S1 = S_MJD(j, S, T, t, lambda0, alpha, delta)
-            d1 = D1(S, K, r1, T, t, sigma1)
-            delta_BS[j] = ((np.exp(-lambdabar * r) * (lambdabar * (T - t)) ** j) / (m.factorial(j))) * st.norm.cdf(d1)
-        return np.sum(delta_BS)
-
-# ----------------------------- 7. MJD Simulation ------------------------------
-def MJDsim(r, mu, sigma, lambda0, alpha, delta, S0, deltaT, K, n):
+# ----------------------------- 5. MJD Simulation ------------------------------
+def MJDsim(r, mu, sigma, lambda0, alpha, deltaJ, S0, deltaT, K, n, type):
     '''
     MJD option and delta simulation.
     '''
-    spot = MJD(mu, sigma, S0, lambda0, alpha, delta, deltaT)
-    call_Jump = np.zeros(int(1 / deltaT))
-    delta_Jump = np.zeros(int(1 / deltaT))
-    for t in range(0, int(1 / deltaT)):
-        call_Jump[t] = Call_Jump(sigma, spot[t],1,((t+1) / int(1 / deltaT)),K,r, lambda0, alpha, delta, n)
-        delta_Jump[t] = Delta_MJD(spot[t],K,r,1,((t+1) / int(1 / deltaT)),sigma,lambda0,alpha,delta,n)
-    return [spot,call_Jump,delta_Jump]
+    N = int(1 / deltaT)
+    t = [j / N for j in range(N + 1)]
+    spot = mc.MJD(mu, sigma, S0, lambda0, alpha, deltaJ, deltaT)
+    option = op.OptionEng(spot, K, r, 1, t, sigma, 'European', type, op.MertonJumpDiffusionEngine(lambda0, alpha, deltaJ, n), deltaT)
+    return [t, spot, option.price(), option.delta()]
 
-def MJDplot(r, mu, sigma, S0, deltaT, K, lambda0, alpha, delta, n):
+def MJDplot(r, mu, sigma, S0, deltaT, K, lambda0, alpha, deltaJ, n, type):
     '''
-    Time series of MJD option price (Eur Call) - Returns spot, call price & delta.
+    Panel plot of MJD option simulation mirroring BSplot style.
+    Plots spot price, option price, and delta over time.
     '''
-    x0 = MJDsim(r, mu, sigma, lambda0, alpha, delta, S0, deltaT, K, n)
-    fig, ax = plt.subplots(figsize=[11, 5])
-    ax.plot(np.arange(int(1 / deltaT)), x0[0], '-o', label='$S_t$', ms=1, alpha=0.6)
-    ax.plot(np.arange(int(1 / deltaT)), x0[1], '-o', label='Call$_t$', ms=1, alpha=0.6)
-    # ax.plot(np.arange(int(1 / deltaT)), x0[2], '-o', label='Call$_t$', ms=1, alpha=0.6)
+    t, spot, vMJD, deltaMJD = MJDsim(r, mu, sigma, lambda0, alpha, deltaJ, S0, deltaT, K, n, type)
+
+    labels = [
+        ("Spot Price", spot),
+        ("Option Price", vMJD),
+        ("Delta", deltaMJD)
+    ]
+
+    # Use a 2x2 panel for clarity and to allow for future expansion (e.g. gamma)
+    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+    axes = axes.flatten()
+
+    for ax, (label, data) in zip(axes, labels):
+        ax.plot(t, data, '-o', ms=1, alpha=0.6, label=label)
+        ax.set_title(label)
+        ax.set_xlabel('Time')
+        ax.set_ylabel('Value')
+        ax.grid(True)
+        ax.legend()
+
+    # Hide any unused subplot(s)
+    for j in range(len(labels), len(axes)):
+        axes[j].axis('off')
+
+    plt.tight_layout()
     plt.show()
     
-# -------------------------- 8. Delta Hedging in MJD ---------------------------
+# ------------------------------ NOT CLEANED WIP -------------------------------
+# -------------------------- 6. Delta Hedging in MJD ---------------------------
 def dhedgeMJD(r, mu, sigma, lambda0, alpha, delta, S0, deltaT, K, n, R):
     x0 = MJDsim(r, mu, sigma, lambda0, alpha, delta, S0, deltaT, K, n)
     S = x0[0]
@@ -869,7 +757,7 @@ def plotsJ(r,mu,sigma,S0,deltaT,K,R,N,lambda0,alpha,delta,n):
     plt.hist(d, bins=200, density=True, color = 'orange')
     plt.show()
 
-# ------------------- 9. Levy Process Simulation (Set Jumps) -------------------
+# ------------------- 7. Levy Process Simulation (Set Jumps) -------------------
 def JumpTime0(j0, lambda0):
     '''
     Jump Times - generates N jump times in [0,1] with lambda0 param
@@ -943,7 +831,7 @@ def LevyPlot0(mu, sigma, S0, lambda0, alpha, delta, deltaT, j0):
     ax.plot(np.arange(int(1 / deltaT)), S1, '-o', label='$S_t$', ms=1, alpha=0.6)
     plt.show()
 
-# ----------------------- 10. MJD Simulation (Set Jumps) -----------------------
+# ----------------------- 8. MJD Simulation (Set Jumps) -----------------------
 def MJDsim0(r, mu, sigma, lambda0, alpha, delta, S0, deltaT, K, n, j0):
     spot = MJD0(mu, sigma, S0, lambda0, alpha, delta, deltaT, j0)
     call_Jump = np.zeros(int(1 / deltaT))
@@ -964,7 +852,7 @@ def MJDplot0(r, mu, sigma, S0, deltaT, K, lambda0, alpha, delta, n, j0):
     # ax.plot(np.arange(int(1 / deltaT)), x0[2], '-o', label='Call$_t$', ms=1, alpha=0.6)
     plt.show()
     
-# -------------------- 11. Delta Hedging in MJD (Set Jumps) --------------------
+# -------------------- 9. Delta Hedging in MJD (Set Jumps) --------------------
 def dhedgeMJD0(r, mu, sigma, lambda0, alpha, delta, S0, deltaT, K, n, R, j0):
     x0 = MJDsim0(r, mu, sigma, lambda0, alpha, delta, S0, deltaT, K, n, j0)
     S = x0[0]
