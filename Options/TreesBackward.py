@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-import Option as op
+import Assets as op
 
 # -------------------- 1. Binomial Tree Backward Induction ---------------------
 def OptionEurPrice(S, K, r, sigma, T, t, type, N):
