@@ -562,7 +562,7 @@ def dhedgePlot(r, mu, sigma, S0, K, type, dt, R):
     plt.tight_layout()
     plt.show()
     
-def dhedgeHist(r, mu, sigma, S0, K, dt, R, N):
+def dhedgeHist(r, mu, sigma, S0, K, type, dt, R, N):
     """
     Monte Carlo function for simulating trading strategy multiple times, returning the histogram of adjusted profit.
     
@@ -599,7 +599,7 @@ def dhedgeHist(r, mu, sigma, S0, K, dt, R, N):
     plt.hist(p, bins=500)
     plt.show()
     
-def dhedgeError(r, mu, sigma, S0, K, dt, R, N):
+def dhedgeError(r, mu, sigma, S0, K, type, dt, R, N):
     """
     Monte Carlo function for simulating trading strategy multiple times, returning the final adjusted portfolio profits for each simulation.
     
@@ -634,12 +634,12 @@ def dhedgeError(r, mu, sigma, S0, K, dt, R, N):
         p[j] = dhedge2(r, mu, sigma, S0, K, type, dt, R)[1][int(1/dt)]
     return p
 
-def dhedgeHistPDF(r, mu, sigma, S0, K, dt, R, N):
+def dhedgeHistPDF(r, mu, sigma, S0, K, type, dt, R, N):
     """
     Simulates a delta-hedging strategy multiple times and plots a histogram
     and kernel density estimate (KDE) of the final adjusted portfolio profits.
     
-    Delta-hedging simulated by dhedgeVF() to optimise run time.
+    Delta-hedging simulated by dhedge2() to optimise run time.
 
     Parameters
     ----------
@@ -665,15 +665,19 @@ def dhedgeHistPDF(r, mu, sigma, S0, K, dt, R, N):
     None
         Displays a figure with a histogram and KDE of the final adjusted profits.
     """
-    d = dhedgeError(r, mu, sigma, S0, K, dt, R, N)
-    print("(r, mu, sigma, S0, 1/dt, K, R, N, min, max, mu_eps, sigma_eps, kurtosis_eps, skew_eps)",[r, mu, sigma, S0, 1/dt, K, R, N, np.min(d), np.max(d), np.mean(d),np.std(d,ddof=1), st.kurtosis(d),st.skew(d)])
+    d = dhedgeError(r, mu, sigma, S0, K, type, dt, R, N)
+    print(f"""
+    Parameters: r={r}, mu={mu}, sigma={sigma}, S0={S0}, K={K}, dt={dt}, R={R}, N={N}
+    Results: min={np.min(d):.4f}, max={np.max(d):.4f}, mean={np.mean(d):.4f}, 
+             std={np.std(d, ddof=1):.4f}, kurt={st.kurtosis(d):.4f}, skew={st.skew(d):.4f}
+    """)
     fig, ax = plt.subplots(figsize=[11, 5])
-    ax.set_xlim([np.min(d), np.max(d)]) # pyright: ignore[reportArgumentType]
+    ax.set_xlim([np.mean(d) - np.std(d, ddof=1), np.mean(d) + np.std(d, ddof=1)]) # pyright: ignore[reportArgumentType]
     kde = st.gaussian_kde(d)
-    x0 = np.linspace(np.min(d), np.max(d), num=1000)
+    x0 = np.linspace(np.mean(d) - 2 * np.std(d, ddof=1), np.mean(d) + 2 * np.std(d, ddof=1), num=2000)
     k1 = kde(x0)
-    ax.plot(x0, k1, color = 'black')
-    plt.hist(d, bins=200, density=True, color = 'orange')
+    plt.hist(d, bins=1000, density=True, color = 'orange', alpha = 0.6, zorder = 1)
+    ax.plot(x0, k1, color = 'black', zorder = 2)
     plt.show()
 
 # ------------------------------ BREAK -------------------------------
@@ -980,7 +984,7 @@ def countProc_setJ(j0, lam, dt):
     '''
     Poisson Counting Process
     '''
-    jt = JumpTime0(j0, lam)
+    jt = JumpTime_setJ(j0, lam)
     count = np.zeros(int(1 / dt))
     for t in range(1, int(1 / dt)):
         a = np.where(jt > (t * dt), 0, jt)
@@ -991,7 +995,7 @@ def countProc_setJ(j0, lam, dt):
             count[t] = list(jt).index(b) + 1
     return count
     
-def JumpAmp0_setJ(j0, lam, alpha, delta):
+def JumpAmp_setJ(j0, lam, alpha, delta):
     '''
     Jump Amplitude
     '''
@@ -1008,8 +1012,8 @@ def PoisProc_setJ(lam, alpha, delta, dt, j0):
     if j0 == 0:
         return J
     else:
-        count_t = countProc0(j0, lam, dt)
-        y_j = JumpAmp0(j0, lam, alpha, delta)
+        count_t = countProc_setJ(j0, lam, dt)
+        y_j = JumpAmp_setJ(j0, lam, alpha, delta)
         for t in range(int(1 / dt)):
             if count_t[t] == 0:
                 J[t] = 0
@@ -1023,7 +1027,7 @@ def MJD_setJ(mu, sigma, S0, lam, alpha, delta, dt, j0):
     '''
     path1 = mc.gbmP0(mu, sigma, S0, 1, dt)
     logS = np.log(path1)
-    J1 = PoisProc0(lam, alpha, delta, dt, j0)
+    J1 = PoisProc_setJ(lam, alpha, delta, dt, j0)
     logS1 = np.add(logS,J1)
     S1 = np.exp(logS1)
     return S1
@@ -1032,14 +1036,14 @@ def LevyPlot_setJ(mu, sigma, S0, lam, alpha, delta, dt, j0):
     '''
     Plot Levy Process
     '''
-    S1 = MJD0(mu, sigma, S0, lam, alpha, delta, dt, j0)
+    S1 = MJD_setJ(mu, sigma, S0, lam, alpha, delta, dt, j0)
     fig, ax = plt.subplots(figsize=[11, 5])
     ax.plot(np.arange(int(1 / dt)), S1, '-o', label='$S_t$', ms=1, alpha=0.6)
     plt.show()
 
 # ------------------------------ 7.2 MJD Simulation ----------------------------
 def MJDsim_setJ(r, mu, sigma, lam, alpha, delta, S0, dt, K, n, j0):
-    spot = MJD0(mu, sigma, S0, lam, alpha, delta, dt, j0)
+    spot = MJD_setJ(mu, sigma, S0, lam, alpha, delta, dt, j0)
     call_Jump = np.zeros(int(1 / dt))
     delta_Jump = np.zeros(int(1 / dt))
     for t in range(0, int(1 / dt)):
@@ -1051,7 +1055,7 @@ def MJDplot_setJ(r, mu, sigma, S0, dt, K, lam, alpha, delta, n, j0):
     '''
     Time series of MJD option price (Eur Call) - Returns spot, call price & delta
     '''
-    x0 = MJDsim0(r, mu, sigma, lam, alpha, delta, S0, dt, K, n, j0)
+    x0 = MJDsim_setJ(r, mu, sigma, lam, alpha, delta, S0, dt, K, n, j0)
     fig, ax = plt.subplots(figsize=[11, 5])
     ax.plot(np.arange(int(1 / dt)), x0[0], '-o', label='$S_t$', ms=1, alpha=0.6)
     ax.plot(np.arange(int(1 / dt)), x0[1], '-o', label='Call$_t$', ms=1, alpha=0.6)
@@ -1060,7 +1064,7 @@ def MJDplot_setJ(r, mu, sigma, S0, dt, K, lam, alpha, delta, n, j0):
     
 # ---------------------------- 7.3 MJD Trading Sim -----------------------------
 def dhedgeMJD_setJ(r, mu, sigma, lam, alpha, delta, S0, dt, K, n, R, j0):
-    x0 = MJDsim0(r, mu, sigma, lam, alpha, delta, S0, dt, K, n, j0)
+    x0 = MJDsim_setJ(r, mu, sigma, lam, alpha, delta, S0, dt, K, n, j0)
     S = x0[0]
     V = x0[1]
     delta = x0[2]
@@ -1097,7 +1101,7 @@ def dhedgeMJD_setJ(r, mu, sigma, lam, alpha, delta, S0, dt, K, n, R, j0):
     return [prof,prof_adj,valS,valB,qS,qB,B,S,V,delta]
 
 def dhedgeMJDplot_setJ(r, mu, sigma, lam, alpha, delta, S0, dt, K, n, R, j0):
-    x0 = dhedgeMJD0(r, mu, sigma, lam, alpha, delta, S0, dt, K, n, R, j0)
+    x0 = dhedgeMJD_setJ(r, mu, sigma, lam, alpha, delta, S0, dt, K, n, R, j0)
     for j in range(9):
         fig, ax = plt.subplots(figsize=[11, 5])
         ax.plot(np.arange(int(1 / dt)), x0[j], '-o', label='$S_t$', ms=1, alpha=0.6)
