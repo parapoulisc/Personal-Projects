@@ -17,4 +17,12 @@ This is currently a work in progress.
     - Exact options pricing for Black-Scholes and Merton Jump Diffusion Models; Tree methods for binomial model; and Monte Carlo methods for simulated processes.
     - Simulating delta-hedging and alternative trading strategies in various modelling environments. Analysis of strategies, quantifying PnL distributions, etc.
     
-    
+2. UK Polling
+
+    Project seeking to identify how voters flow between parties between election dates. Used polling data for UK general election voter intention to decompose such flows.
+
+    Contains programs and algorithms for:
+    - Importing & cleaning of polling data for main political parties along with visualisation.
+    - Applying appropriate smoothing and processing of data into usable form.
+    - Estimating a time-varying Markov chain model to reveal transition probabilities between parties.
+    - Estimation by Elastic Net regularisation and model selection & evaluation over hyperparameters.
