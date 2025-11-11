@@ -69,19 +69,23 @@ def GetLatestPolls(polls):
 
     tables = pd.read_html(html, flavor="lxml")
 
-    # Identify the 2025 table
+    # Identify the 2025 polling table
     polls_new = None
     for t in tables:
-        if "Fieldwork date(s)" in t.columns or "Dates conducted" in t.columns:
+        if "Date(s) conducted" in t.columns:
             polls_new = t
             break
-
+    
     if polls_new is None:
         raise ValueError("Could not find 2025 polling table")
+    
+    # Reformat column headers
+    polls_new.columns = polls_new.columns.get_level_values(0)
+
 
     # Match party names to df
     polls_new = polls_new.rename(columns={
-        "Fieldwork date(s)": "dates_conducted",
+        "Date(s) conducted": "dates_conducted",
         "Polling firm/Commissioner": "pollster",
         "Sample size": "sample_size",
         "Con": "Con",
@@ -97,10 +101,7 @@ def GetLatestPolls(polls):
     
     # Drop irrelevant entries & relabel
     polls_new = polls_new.drop(columns=['Pollster','Client','Area','sample_size','Others','Lead','SNP','PC'])
-    polls_new = polls_new.rename(columns={'Grn':'Green','Dates conducted':'Date'})
-    
-    # Reformat column headers
-    polls_new.columns = polls_new.columns.get_level_values(0)
+    polls_new = polls_new.rename(columns={'Grn':'Green','dates_conducted':'Date'})
     
     # Remove redundant info
     parties = ['Con','Lab','Ref','LD','Green']

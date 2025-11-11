@@ -13,13 +13,15 @@ def SmoothPolls(daily: pd.DataFrame):
     Returns:
         smoothed_polls (pd.DataFrame): _description_
     """
-    daily.index = pd.to_datetime(daily.index)
+    daily.index = pd.to_datetime(daily.index) # type: ignore
     daily = daily.sort_index()
 
-    smoothed_first_pass = pd.DataFrame(index=daily.index, columns=daily.columns, dtype=float)
-    smoothed_polls = pd.DataFrame(index=daily.index, columns=daily.columns, dtype=float)
+    smoothed_first_pass = pd.DataFrame(index=daily.index, columns=daily.
+                                       columns, dtype=float)
+    smoothed_polls = pd.DataFrame(index=daily.index, columns=daily.columns, 
+                                  dtype=float)
 
-    # First pass: smooth only between observed polls
+    # First pass: smooth between observed polls
     for party in daily.columns:
         series = daily[party].asfreq('D')
         if series.notna().sum() < 2:
@@ -34,7 +36,7 @@ def SmoothPolls(daily: pd.DataFrame):
         smoothed_series[series.isna()] = np.nan
         smoothed_first_pass[party] = smoothed_series
 
-    # Second pass: fill only leading/trailing NaNs with 0
+    # Second pass: smooth outside observations
     for party in daily.columns:
         series = smoothed_first_pass[party].copy()
         
@@ -47,7 +49,7 @@ def SmoothPolls(daily: pd.DataFrame):
         series[:first_valid] = 0
         series[last_valid + pd.Timedelta(days=1):] = 0 # type: ignore
         
-        # Fit smoother to the full series
+        # Smooth full series
         series = series.asfreq('D')
         mod = sm.tsa.UnobservedComponents(series, level='local level') # type: ignore
         res = mod.fit(disp=False)
@@ -66,7 +68,7 @@ def AggPolls(smoothed_polls: pd.DataFrame):
     Returns:
         smoothed_polls (pd.DataFrame): Smoothed polls with aggregates
     """
-    # Calculate other party support
+    # Calculate support for non major parties
     smoothed_polls['Others'] = 100 - smoothed_polls.sum(axis = 1)
     # Aggregates
     smoothed_polls['Right'] = smoothed_polls['Con'] + smoothed_polls['Ref'] + smoothed_polls['UKIP'] + smoothed_polls['BNP']
@@ -79,6 +81,9 @@ def AggPolls(smoothed_polls: pd.DataFrame):
     smoothed_polls['Major'] = smoothed_polls['Con'] + smoothed_polls['Lab']
     smoothed_polls['Minor'] = 100 - smoothed_polls['Major']
     smoothed_polls['Others_exp'] = smoothed_polls['Others'] + smoothed_polls['TIG/CUK']
+    smoothed_polls['LeftPlus'] = smoothed_polls['Left'] + smoothed_polls['Others']
+    smoothed_polls['NonLabLeftPlus'] = smoothed_polls['NonLabLeft'] + smoothed_polls['Others']
+    smoothed_polls['Lab/LeftPlus'] = 100 * smoothed_polls['Lab'] / smoothed_polls['LeftPlus']
     
     return smoothed_polls
 

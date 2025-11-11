@@ -213,12 +213,9 @@ def MarkovEstRoll(polls_df,
         end = start + window
         sub = df.iloc[start:end]
 
-        T_est = MarkovEst(
-            polls_df=sub,
-            parties=parties,
-            alpha=alpha,
-            lam=lam
-        )
+        T_est = MarkovEst(polls_df=sub, parties=parties,
+                          alpha=alpha, lam=lam
+                          )
 
         # Flatten KxK matrix row-wise (to-party contiguous)
         T_list.append(T_est.to_numpy().flatten(order='F'))
@@ -229,7 +226,7 @@ def MarkovEstRoll(polls_df,
 
     T_stack = pd.DataFrame(T_list, index=idx_list, columns=columns)
 
-    # Optional row/col diagnostics
+    # Optional row/col sum diagnostics
     if diag == True:
         TrMatDiag(T_stack, parties)
 

@@ -42,7 +42,7 @@ def PlotTrMat(T_stack: pd.DataFrame,
     ax.set_xlim(pd.to_datetime(start_date), pd.to_datetime(end_date)) # type: ignore
 
     for name, d in event_dates.items():
-        ax.axvline(x=pd.d, color="red", linestyle="--", linewidth=0.5) # type: ignore
+        ax.axvline(x=d, color="red", linestyle="--", linewidth=0.5) # type: ignore
         ax.text(d, ax.get_ylim()[1]*0.95, name, rotation=90, ha="right", va="top", # type: ignore
                 fontsize=5, color="red")
     

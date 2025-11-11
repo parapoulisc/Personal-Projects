@@ -59,8 +59,8 @@ def GetEvents(start_date=None, end_date=None):
 # Polling plot functions
 def PlotPolls(smoothed_polls: pd.DataFrame,
               start_date=None, end_date=None,
-              support_threshold=1.0, tight = False, tight_margin = 0.05,
-              daily = None):
+              support_threshold=1.0, tight=False, tight_margin=0.05, OtherInLeft=False,
+              daily=None):
     
     """Plots time series of smoothed party support and polling aggregates.
 
@@ -73,24 +73,24 @@ def PlotPolls(smoothed_polls: pd.DataFrame,
         daily (pd.Dataframe, optional): Raw polls for infering individial parties to be plotted. Set to daily = daily when calling function for correct graphics. Defaults to None.
     """
     
+    # Default time series plots to entire data series
     if start_date is None:
         start_date = str(smoothed_polls.index.min())
     if end_date is None:
         end_date = str(smoothed_polls.index.max())
 
-    # Retrieve dictionary of events
-    event_dates = GetEvents(start_date,end_date)
+    # Retrieve dictionary of events for markers
+    event_dates = GetEvents(start_date, end_date)
 
-    # Support threshold
+    # Support threshold option
     mask = (smoothed_polls.index >= pd.to_datetime(start_date)) & (smoothed_polls.index <= pd.to_datetime(end_date))
 
-    # Try to infer the daily DataFrame from smoothed_polls if possible
+    # Parties to be plotted subject to support threshold
     parties = ['Con', 'Lab', 'LD', 'Green', 'Ref', 'UKIP', 'BNP', 'TIG/CUK', 'Others']
     parties = [p for p in parties if smoothed_polls.loc[mask,p].max(skipna=True) >= support_threshold]
 
+    # Plot layouts 
     n = len(parties)
-
-    # Determine grid layout
     ncols = 3
     nrows = (n + ncols - 1) // ncols
 
@@ -132,9 +132,9 @@ def PlotPolls(smoothed_polls: pd.DataFrame,
 
     fig.suptitle("Polling Support (Kalman Smoothed)", fontsize=16)
     for ax in axes:
-        ax.tick_params(labelbottom=True)   # force x labels
+        ax.tick_params(labelbottom=True)
         ax.tick_params(labelleft=True)
-        plt.setp(ax.get_xticklabels(), rotation=45, ha='right')  # rotate all x labels
+        plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
 
     plt.tight_layout()
     plt.show()
@@ -144,19 +144,20 @@ def PlotPolls(smoothed_polls: pd.DataFrame,
 
     fig, axes = plt.subplots(3, 3, figsize=(15, 15), sharex=True, sharey=False)
     axes = axes.flatten()
-
+    
     for i, col in enumerate(cols):
         axes[i].set_xlim([pd.to_datetime(start_date), pd.to_datetime(end_date)])
-        axes[i].plot(smoothed_polls.index, smoothed_polls[col], linewidth=1.5, label=col)
+        axes[i].plot(smoothed_polls.index, smoothed_polls[col], linewidth=1.5, 
+                     label=col)
         axes[i].set_title(col)
         axes[i].legend()
-        # Add tight y-limits if requested
+        # Tighter plot option
         if tight:
             y_data = smoothed_polls.loc[mask, col].dropna()
             y_min, y_max = y_data.min(), y_data.max()
             margin = tight_margin * (y_max - y_min)
             axes[i].set_ylim(y_min - margin, y_max + margin)
-        # Event Markers per subplot
+        # Event markers
         for name, d in event_dates.items():
             axes[i].axvline(x=d, color="red", linestyle="--", linewidth=0.5)
             axes[i].text(
@@ -165,12 +166,24 @@ def PlotPolls(smoothed_polls: pd.DataFrame,
                 rotation=90, ha="right", va="top",
                 fontsize=5, color="red"
             )
-
+            
+    # Overlay broader aggregate option
+    if OtherInLeft is True:
+        axes[1].plot(smoothed_polls.index, smoothed_polls['LeftPlus'], 
+                     linewidth=1.5, label='Left inc. Others')
+        axes[3].plot(smoothed_polls.index, smoothed_polls['NonLabLeftPlus'], 
+                     linewidth=1.5, label='NonLabLeftPlus')
+        axes[4].plot(smoothed_polls.index, smoothed_polls['Lab/LeftPlus'], 
+                     linewidth=1.5, label='Lab/LeftPlus')
+        axes[1].legend()
+        axes[3].legend()
+        axes[4].legend()
+        
     fig.suptitle("Aggregates", fontsize=16)
     for ax in axes:
-        ax.tick_params(labelbottom=True)   # force x labels
+        ax.tick_params(labelbottom=True)
         ax.tick_params(labelleft=True)
-        plt.setp(ax.get_xticklabels(), rotation=45, ha='right')  # rotate all x labels
+        plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
 
     plt.tight_layout()
     plt.show()
